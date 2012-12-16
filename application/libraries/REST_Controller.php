@@ -296,7 +296,12 @@ abstract class REST_Controller extends CI_Controller
 		// Sure it exists, but can they do anything with it?
 		if ( ! method_exists($this, $controller_method))
 		{
-			$this->response(array('status' => false, 'error' => 'Unknown method.'), 404);
+			log_message('debug', '==> ' . $controller_method . ' not found!!'); // FIXME: Remove this line!
+			$this->response(array('status' => false, 'error' => 'Unknown method: '.$controller_method), 404);
+		}
+		else
+		{
+			log_message('debug', '==> ' . $controller_method . ' found!!'); // FIXME: Remove this line!
 		}
 
 		// Doing key related stuff? Can only do it if they have a key right?
