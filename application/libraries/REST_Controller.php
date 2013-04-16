@@ -11,7 +11,7 @@
  * @author        	Phil Sturgeon
  * @license         http://philsturgeon.co.uk/code/dbad-license
  * @link			https://github.com/philsturgeon/codeigniter-restserver
- * @version 		2.6.1
+ * @version 		2.6.2
  */
 abstract class REST_Controller extends CI_Controller
 {
@@ -59,13 +59,6 @@ abstract class REST_Controller extends CI_Controller
 	 * @var object
 	 */
 	protected $rest = NULL;
-
-	/**
-	 * Object to store data about the client sending the request
-	 *
-	 * @var object
-	 */
-	 protected $client = NULL;	 
 
 	/**
 	 * The arguments for the GET request method
@@ -117,6 +110,13 @@ abstract class REST_Controller extends CI_Controller
 	protected $_zlib_oc = FALSE;
 
 	/**
+	 * The LDAP Distinguished Name of the User post authentication
+	 *
+	 * @var string
+	*/
+	protected $_user_ldap_dn = '';
+
+	/**
 	 * List all supported methods, the first will be the default format
 	 *
 	 * @var array
@@ -154,10 +154,10 @@ abstract class REST_Controller extends CI_Controller
 
 		// let's learn about the request
 		$this->request = new stdClass();
-		
+
 		// Is it over SSL?
 		$this->request->ssl = $this->_detect_ssl();
-		
+
 		// How is this request being made? POST, DELETE, GET, PUT?
 		$this->request->method = $this->_detect_method();
 
@@ -170,7 +170,7 @@ abstract class REST_Controller extends CI_Controller
 		// Set up our GET variables
 		$this->_get_args = array_merge($this->_get_args, $this->uri->ruri_to_assoc());
 
-		//$this->load->library('security');
+		$this->load->library('security');
 
 		// This library is bundled with REST_Controller 2.5+, but will eventually be part of CodeIgniter itself
 		$this->load->library('format');
@@ -265,9 +265,9 @@ abstract class REST_Controller extends CI_Controller
 		// Should we answer if not over SSL?
 		if (config_item('force_https') AND !$this->_detect_ssl())
 		{
-			$this->response(array('status' => false, 'error' => 'Unsupported protocol'), 403);	
+			$this->response(array('status' => false, 'error' => 'Unsupported protocol'), 403);
 		}
-		
+
 		$pattern = '/^(.*)\.('.implode('|', array_keys($this->_supported_formats)).')$/';
 		if (preg_match($pattern, $object_called, $matches))
 		{
@@ -373,6 +373,12 @@ abstract class REST_Controller extends CI_Controller
 			$output = NULL;
 		}
 
+		// If data is empty but http code provided, keep the output empty
+		else if (empty($data) && is_numeric($http_code))
+		{
+			$output = NULL;
+		}
+
 		// Otherwise (if no data but 200 provided) or some data, carry on camping!
 		else
 		{
@@ -439,8 +445,8 @@ abstract class REST_Controller extends CI_Controller
 	{
     		return (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == "on");
 	}
-	
-	
+
+
 	/*
 	 * Detect input format
 	 *
@@ -603,17 +609,17 @@ abstract class REST_Controller extends CI_Controller
 		// Find the key from server or arguments
 		if (($key = isset($this->_args[$api_key_variable]) ? $this->_args[$api_key_variable] : $this->input->server($key_name)))
 		{
-			if ( ! ($this->client = $this->rest->db->where(config_item('rest_key_column'), $key)->get(config_item('rest_keys_table'))->row()))
+			if ( ! ($row = $this->rest->db->where(config_item('rest_key_column'), $key)->get(config_item('rest_keys_table'))->row()))
 			{
 				return FALSE;
 			}
 
-			$this->rest->key = $this->client->{config_item('rest_key_column')};
+			$this->rest->key = $row->{config_item('rest_key_column')};
 
 			isset($row->user_id) AND $this->rest->user_id = $row->user_id;
 			isset($row->level) AND $this->rest->level = $row->level;
 			isset($row->ignore_limits) AND $this->rest->ignore_limits = $row->ignore_limits;
-			
+
 			/*
 			 * If "is private key" is enabled, compare the ip address with the list
 			 * of valid ip addresses stored in the database.
@@ -626,7 +632,7 @@ abstract class REST_Controller extends CI_Controller
 					// multiple ip addresses must be separated using a comma, explode and loop
 					$list_ip_addresses = explode(",", $row->ip_addresses);
 					$found_address = FALSE;
-					
+
 					foreach($list_ip_addresses as $ip_address)
 					{
 						if($this->input->ip_address() == trim($ip_address))
@@ -636,7 +642,7 @@ abstract class REST_Controller extends CI_Controller
 							break;
 						}
 					}
-					
+
 					return $found_address;
 				}
 				else
@@ -646,7 +652,7 @@ abstract class REST_Controller extends CI_Controller
 				}
 			}
 
-			return $this->client;
+			return $row;
 		}
 
 		// No key has been sent
@@ -701,7 +707,7 @@ abstract class REST_Controller extends CI_Controller
 		return $this->rest->db->insert(config_item('rest_logs_table'), array(
 					'uri' => $this->uri->uri_string(),
 					'method' => $this->request->method,
-					'params' => $this->_args ? serialize($this->_args) : null,
+					'params' => $this->_args ? (config_item('rest_logs_json_params') ? json_encode($this->_args) : serialize($this->_args)) : null,
 					'api_key' => isset($this->rest->key) ? $this->rest->key : '',
 					'ip_address' => $this->input->ip_address(),
 					'time' => function_exists('now') ? now() : time(),
@@ -976,6 +982,94 @@ abstract class REST_Controller extends CI_Controller
 	// SECURITY FUNCTIONS ---------------------------------------------------------
 
 	/**
+	 * Perform LDAP Authentication
+	 *
+	 * @param string $username The username to validate
+	 * @param string $password The password to validate
+	 * @return boolean
+	 */
+	protected function _perform_ldap_auth($username = '', $password = NULL)
+	{
+		if (empty($username))
+		{
+			log_message('debug', 'LDAP Auth: failure, empty username');
+			return false;
+		}
+
+		log_message('debug', 'LDAP Auth: Loading Config');
+
+		$this->config->load('ldap.php', true);
+
+		$ldaptimeout = $this->config->item('timeout', 'ldap');
+		$ldaphost = $this->config->item('server', 'ldap');
+		$ldapport = $this->config->item('port', 'ldap');
+		$ldaprdn = $this->config->item('binduser', 'ldap');
+		$ldappass = $this->config->item('bindpw', 'ldap');
+		$ldapbasedn = $this->config->item('basedn', 'ldap');
+
+		log_message('debug', 'LDAP Auth: Connect to ' . $ldaphost);
+
+		$ldapconfig['authrealm'] = $this->config->item('domain', 'ldap');
+
+		// connect to ldap server
+		$ldapconn = ldap_connect($ldaphost, $ldapport);
+
+		if ($ldapconn) {
+
+			log_message('debug', 'Setting timeout to ' . $ldaptimeout . ' seconds');
+
+			ldap_set_option($ldapconn, LDAP_OPT_NETWORK_TIMEOUT, $ldaptimeout);
+
+			log_message('debug', 'LDAP Auth: Binding to ' . $ldaphost . ' with dn ' . $ldaprdn);
+
+			// binding to ldap server
+			$ldapbind = ldap_bind($ldapconn, $ldaprdn, $ldappass);
+
+			// verify binding
+			if ($ldapbind) {
+				log_message('debug', 'LDAP Auth: bind successful');
+			} else {
+				log_message('error', 'LDAP Auth: bind unsuccessful');
+				return false;
+			}
+
+		}
+
+		// search for user
+		if (($res_id = ldap_search( $ldapconn, $ldapbasedn, "uid=$username")) == false) {
+			log_message('error', 'LDAP Auth: User ' . $username . ' not found in search');
+			return false;
+		}
+
+		if (ldap_count_entries($ldapconn, $res_id) != 1) {
+			log_message('error', 'LDAP Auth: failure, username ' . $username . 'found more than once');
+			return false;
+		}
+
+		if (( $entry_id = ldap_first_entry($ldapconn, $res_id))== false) {
+			log_message('error', 'LDAP Auth: failure, entry of searchresult could not be fetched');
+			return false;
+		}
+
+		if (( $user_dn = ldap_get_dn($ldapconn, $entry_id)) == false) {
+			log_message('error', 'LDAP Auth: failure, user-dn could not be fetched');
+			return false;
+		}
+
+		// User found, could not authenticate as user
+		if (($link_id = ldap_bind($ldapconn, $user_dn, $password)) == false) {
+			log_message('error', 'LDAP Auth: failure, username/password did not match: ' . $user_dn);
+			return false;
+		}
+
+		log_message('debug', 'LDAP Auth: Success ' . $user_dn . ' authenticated successfully');
+
+		$this->_user_ldap_dn = $user_dn;
+		ldap_close($ldapconn);
+		return true;
+	}
+
+	/**
 	 * Check if the user is logged in.
 	 *
 	 * @param string $username The user's name
@@ -987,6 +1081,14 @@ abstract class REST_Controller extends CI_Controller
 		if (empty($username))
 		{
 			return FALSE;
+		}
+
+		$auth_source = strtolower($this->config->item('auth_source'));
+
+		if ($auth_source == 'ldap')
+		{
+			log_message('debug', 'performing LDAP authentication for $username');
+			return $this->_perform_ldap_auth($username, $password);
 		}
 
 		$valid_logins = & $this->config->item('rest_valid_logins');

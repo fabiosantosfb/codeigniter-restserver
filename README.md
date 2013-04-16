@@ -83,19 +83,19 @@ If you don't specify a response code, and the data you respond with `== FALSE` (
 
 ## Multilingual Support
 
-If your application uses language files to support multiple locales, `REST_Controller` will automatically parse the HTTP `Accept-Language` header and provide the language(s) in your actions. This information can be found in the `$this->request->lang` object:
+If your application uses language files to support multiple locales, `REST_Controller` will automatically parse the HTTP `Accept-Language` header and provide the language(s) in your actions. This information can be found in the `$this->response->lang` object:
 
 	public function __construct()
 	{
 		parent::__construct();
 
-		if (is_array($this->request->lang))
+		if (is_array($this->response->lang))
 		{
-			$this->load->language('application', $this->request->lang[0]);
+			$this->load->language('application', $this->response->lang[0]);
 		}
 		else
 		{
-			$this->load->language('application', $this->request->lang);
+			$this->load->language('application', $this->response->lang);
 		}
 	}
 
@@ -145,6 +145,11 @@ By default, the HTTP will be `X-API-KEY`. This can be configured in **config/res
 * [NetTuts: Working with RESTful Services in CodeIgniter](http://net.tutsplus.com/tutorials/php/working-with-restful-services-in-codeigniter-2/)
 
 ## Change Log
+
+### 2.6.2
+
+* Update CodeIgniter files to 2.1.3
+* Fixed issue #165
 
 ### 2.6.1
 
