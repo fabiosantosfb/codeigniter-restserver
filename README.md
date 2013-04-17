@@ -14,6 +14,40 @@ _Note: for 1.7.x support download v2.2 from Downloads tab_
 
 Drag and drop the **application/libraries/Format.php** and **application/libraries/REST_Controller.php** files into your application's directories. Either autoload the `REST_Controller` class or `require_once` it at the top of your controllers to load it into the scope. Additionally, copy the **rest.php** file from **application/config** in your application's configuration directory.
 
+### Optional (Just for PHP-MG Talks 3)
+
+Tabela de Tarefas:
+```sql
+DROP TABLE IF EXISTS tarefas;
+
+CREATE TABLE IF NOT EXISTS tarefas (
+	id int(11) NOT NULL AUTO_INCREMENT,
+	texto varchar(63) NOT NULL,
+	feita tinyint(1) NOT NULL DEFAULT '0',
+	created datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+	modified timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	PRIMARY KEY (id),
+	KEY texto (texto)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+INSERT INTO tarefas SET texto = 'Acender o fogão a lenha', created = now();
+INSERT INTO tarefas SET texto = 'Tomar o chimarrão', created = now();
+INSERT INTO tarefas SET texto = 'Encher a caixa d’água', created = now();
+INSERT INTO tarefas SET texto = 'Soltar as galinhas', created = now();
+INSERT INTO tarefas SET texto = 'Colher os ovos', created = now();
+INSERT INTO tarefas SET texto = 'Apartar o gado', created = now();
+INSERT INTO tarefas SET texto = 'Tirar o leite das vacas', created = now();
+INSERT INTO tarefas SET texto = 'Salgar os coxos', created = now();
+INSERT INTO tarefas SET texto = 'Aparar a grama', created = now();
+INSERT INTO tarefas SET texto = 'Debulhar o milho', created = now();
+INSERT INTO tarefas SET texto = 'Pintar a cerca', created = now();
+INSERT INTO tarefas SET texto = 'Regar as plantas', created = now();
+INSERT INTO tarefas SET texto = 'Roçar o mato', created = now();
+INSERT INTO tarefas SET texto = 'Colher o pinhão', created = now();
+
+GRANT ALL PRIVILEGES ON tarefas.* TO tarefas@localhost IDENTIFIED BY 'tarefas';
+```
+
 ## Handling Requests
 
 When your controller extends from `REST_Controller`, the method names will be appended with the HTTP method used to access the request. If you're  making an HTTP `GET` call to `/books`, for instance, it would call a `Books#index_get()` method.

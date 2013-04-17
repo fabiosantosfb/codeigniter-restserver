@@ -41,6 +41,10 @@
 $route['default_controller'] = "welcome";
 $route['404_override'] = '';
 
+// Rotas para as tarefas:
+$route['api/tarefas/(:num)'] = 'api/tarefas/id/$1';
+$route['api/tarefas/(:any)'] = 'api/tarefas/index/$1';
+$route['api/tarefas\?texto=(:any)'] = 'api/tarefas/index/$1';
 
 /* End of file routes.php */
 /* Location: ./application/config/routes.php */
