@@ -18,6 +18,9 @@ Drag and drop the **application/libraries/Format.php** and **application/librari
 
 Tabela de Tarefas:
 ```sql
+CREATE DATABASE tarefas DEFAULT CHARACTER SET latin1 COLLATE latin1_swedish_ci;
+USE tarefas;
+
 DROP TABLE IF EXISTS tarefas;
 
 CREATE TABLE IF NOT EXISTS tarefas (
